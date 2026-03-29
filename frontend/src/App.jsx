@@ -236,7 +236,7 @@ function Layout() {
         {(role === "employee" || role === "manager" || role === "admin") && (
           <>
             <NavSection label="Expenses" />
-            <NavLink to="/expenses" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+            <NavLink to="/expenses" end className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
               <Receipt size={16} />
               {role === "employee" ? "My Expenses" : "Company Expenses"}
             </NavLink>
@@ -245,7 +245,7 @@ function Layout() {
 
         {(role === "employee") && (
           <NavLink to="/expenses/submit" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
-            <FilePlus size={16} /> Submit Claim
+            <FilePlus size={16} /> Submit Expense
           </NavLink>
         )}
 

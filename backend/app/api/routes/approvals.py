@@ -70,7 +70,7 @@ def get_approval_queue(
                 expense_id=exp.id,
                 title=exp.title,
                 submitted_by=str(exp.submitted_by),
-                submitted_by_name=exp.submitted_by_user.full_name if exp.submitted_by_user else "Unknown",
+                submitted_by_name=(exp.submitted_by_user.full_name or exp.submitted_by_user.email) if exp.submitted_by_user else "Unknown",
                 amount=float(exp.amount),
                 currency=exp.currency,
                 converted_amount=float(exp.converted_amount) if exp.converted_amount else None,

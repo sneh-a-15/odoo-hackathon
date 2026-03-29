@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 
 import client from "../../api/client";
 import { DataTable, Badge, Button, useToast } from "../../components/ui/UICore";
+import { useAuth } from "../../App";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -317,6 +318,9 @@ function DetailDrawer({ expense, history, historyLoading, onClose }) {
 
 export default function ExpenseList() {
   const toast = useToast();
+  const { user } = useAuth();
+  
+  const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
 
   const [expenses,        setExpenses]        = useState([]);
   const [loading,         setLoading]         = useState(true);
@@ -392,6 +396,16 @@ export default function ExpenseList() {
       ),
     },
     {
+      key:    "submitted_by_name",
+      header: "Submitted By",
+      render: (v) => <span style={{ color: "#f1f5f9", fontSize: 13 }}>{v || "—"}</span>,
+    },
+    {
+      key:    "approved_by_names",
+      header: "Actioned By",
+      render: (v) => <span style={{ color: "#f1f5f9", fontSize: 13 }}>{v && v !== "None" ? v : "—"}</span>,
+    },
+    {
       key:    "amount",
       header: "Amount",
       render: (v, row) => (
@@ -440,9 +454,11 @@ export default function ExpenseList() {
         {/* ── Page header ────────────────────────────────────────────────── */}
         <div style={styles.pageHeader}>
           <div>
-            <h1 style={styles.pageTitle}>My Expenses</h1>
+            <h1 style={styles.pageTitle}>{isAdminOrManager ? "All Company Expenses" : "My Expenses"}</h1>
             <p style={styles.pageSubtitle}>
-              Track the status of your submitted expense claims and view their approval history.
+              {isAdminOrManager 
+                ? "Track and review all expense claims submitted across the company."
+                : "Track the status of your submitted expense claims and view their approval history."}
             </p>
           </div>
           <div style={styles.summaryPill}>
@@ -500,7 +516,7 @@ export default function ExpenseList() {
 const styles = {
   // Page layout
   page: {
-    minHeight:     "100vh",
+    minHeight:     "100%",
     background:    "#0d1117",
     padding:       "40px 32px",
     fontFamily:    "sans-serif",

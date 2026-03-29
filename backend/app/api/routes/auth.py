@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token
+from app.core.dependencies import get_current_user
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
 from app.models.models import User, Company, UserRole
 import httpx
@@ -68,4 +69,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {"id": str(user.id), "email": user.email, "role": user.role, "company_id": str(user.company_id)}
+    }
+
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role.value if hasattr(current_user.role, 'value') else current_user.role,
+        "company_id": str(current_user.company_id),
+        "manager_id": str(current_user.manager_id) if current_user.manager_id else None
     }

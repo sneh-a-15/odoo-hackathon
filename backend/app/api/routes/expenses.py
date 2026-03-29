@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_employee
-from app.models.models import Expense, Company, User
+from app.models.models import Expense, Company, User, ApprovalDecision
 from app.schemas.expense import ExpenseCreate, ExpenseResponse
 from app.services.currency_service import convert_amount
 from app.services.approval_service import auto_assign_rule, NoApprovalRuleError
@@ -50,7 +50,6 @@ async def submit_expense(
     try:
         auto_assign_rule(expense.id, db)
     except NoApprovalRuleError:
-        # No rule configured yet — expense is saved but won't appear in queue
         pass
 
     return {
@@ -73,12 +72,14 @@ def get_expenses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Expense).filter(
+    query = db.query(Expense).options(
+        joinedload(Expense.submitted_by_user),
+        joinedload(Expense.approval_decisions).joinedload(ApprovalDecision.decided_by_user)
+    ).filter(
         Expense.company_id == current_user.company_id,
         Expense.deleted_at == None
     )
 
-    # employees only see their own
     if current_user.role == "employee":
         query = query.filter(Expense.submitted_by == current_user.id)
     # managers see only their direct reports' expenses
@@ -109,6 +110,8 @@ def get_expenses(
                 "status": e.status,
                 "expense_date": str(e.expense_date),
                 "category": e.category,
+                "submitted_by_name": (e.submitted_by_user.full_name or e.submitted_by_user.email) if e.submitted_by_user else "Unknown",
+                "approved_by_names": ", ".join([(d.decided_by_user.full_name or d.decided_by_user.email) for d in e.approval_decisions if d.decision.value == "approved"]) or "None"
             }
             for e in items
         ],

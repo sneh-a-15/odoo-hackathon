@@ -258,7 +258,7 @@ export default function UserManagement() {
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    minHeight: "100%",
     background: "#0d1117",
     padding: "40px 32px",
     fontFamily: "sans-serif",

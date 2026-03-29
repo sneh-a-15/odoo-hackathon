@@ -388,7 +388,7 @@ def get_approval_history(expense_id: UUID, db: Session) -> list[dict]:
         {
             "step_index": d.step_index,
             "decided_by": str(d.decided_by),
-            "decided_by_name": d.decided_by_user.full_name if d.decided_by_user else None,
+            "decided_by_name": (d.decided_by_user.full_name or d.decided_by_user.email) if d.decided_by_user else None,
             "decision": d.decision.value if hasattr(d.decision, 'value') else d.decision,
             "comment": d.comment,
             "decided_at": d.decided_at.isoformat() if d.decided_at else None,

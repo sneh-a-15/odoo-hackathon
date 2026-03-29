@@ -125,6 +125,7 @@ def process_decision(
     decision: str,
     comment: str | None,
     db: Session,
+    allow_override: bool = False,
 ) -> dict:
     """
     Process an approval or rejection decision on an expense.
@@ -144,7 +145,10 @@ def process_decision(
     """
     expense = (
         db.query(Expense)
-        .options(joinedload(Expense.approval_rule))
+        .options(
+            joinedload(Expense.approval_rule),
+            joinedload(Expense.submitted_by_user)
+        )
         .filter(Expense.id == expense_id, Expense.deleted_at.is_(None))
         .first()
     )
@@ -174,19 +178,17 @@ def process_decision(
             f"No step found at step_order={expense.current_step} for this rule"
         )
 
-    # Check if user is explicit approver or manager approver
-    is_approver = current_step.approver_user_id == user_id
-    if not is_approver and current_step.is_manager_approver:
-        # Check if user_id is the manager of the person who submitted the expense
-        from app.models.models import User
-        submitter = db.query(User).filter(User.id == expense.submitted_by).first()
-        if submitter and submitter.manager_id == user_id:
-            is_approver = True
+    expected_approver_id = current_step.approver_user_id
+    if current_step.is_manager_approver and expense.submitted_by_user and expense.submitted_by_user.manager_id:
+        expected_approver_id = expense.submitted_by_user.manager_id
 
-    if not is_approver:
-        raise NotCurrentApproverError(
-            "You are not the designated approver for the current step"
-        )
+    is_override = False
+    if expected_approver_id != user_id:
+        if not allow_override:
+            raise NotCurrentApproverError(
+                "You are not the designated approver for the current step"
+            )
+        is_override = True
 
     # Check for duplicate decision at this step
     existing = (
@@ -216,7 +218,27 @@ def process_decision(
     db.flush()
 
     # Evaluate outcome
-    result = _evaluate_and_advance(expense, decision_enum, db)
+    if is_override:
+        if decision_enum == DecisionType.rejected:
+            expense.status = ExpenseStatus.rejected
+            result = {
+                "expense_id": str(expense.id),
+                "decision": "rejected",
+                "expense_status": "rejected",
+                "next_step": None,
+                "triggered_by": "admin_override",
+            }
+        else:
+            expense.status = ExpenseStatus.approved
+            result = {
+                "expense_id": str(expense.id),
+                "decision": "approved",
+                "expense_status": "approved",
+                "next_step": None,
+                "triggered_by": "admin_override",
+            }
+    else:
+        result = _evaluate_and_advance(expense, decision_enum, db)
 
     db.commit()
     db.refresh(expense)
@@ -365,7 +387,7 @@ def _evaluate_and_advance(
 
 def get_current_approver(expense_id: UUID, db: Session) -> UUID | None:
     """Return the user_id of the designated approver for the expense's current step."""
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    expense = db.query(Expense).options(joinedload(Expense.submitted_by_user)).filter(Expense.id == expense_id).first()
     if not expense or not expense.approval_rule_id:
         return None
 
@@ -378,7 +400,14 @@ def get_current_approver(expense_id: UUID, db: Session) -> UUID | None:
         )
         .first()
     )
-    return step.approver_user_id if step else None
+    if not step:
+        return None
+
+    expected_approver_id = step.approver_user_id
+    if step.is_manager_approver and expense.submitted_by_user and expense.submitted_by_user.manager_id:
+        expected_approver_id = expense.submitted_by_user.manager_id
+
+    return expected_approver_id
 
 
 def get_approval_history(expense_id: UUID, db: Session) -> list[dict]:

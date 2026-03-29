@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload, aliased
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 from uuid import UUID
 from typing import List
@@ -38,33 +38,57 @@ def get_approval_queue(
     # approver for the current step. Uses a join through:
     #   expenses → approval_rules → approval_steps
     # filtering on step_order = expense.current_step AND (approver_user_id = caller OR manager_id = caller)
-    expense_user = aliased(User)
 
-    pending_expenses = (
-        db.query(Expense)
-        .join(ApprovalRule, Expense.approval_rule_id == ApprovalRule.id)
-        .join(ApprovalStep, ApprovalStep.rule_id == ApprovalRule.id)
-        .join(expense_user, Expense.submitted_by == expense_user.id)
-        .options(
-            joinedload(Expense.submitted_by_user),
-            joinedload(Expense.approval_rule).joinedload(ApprovalRule.steps),
+    if current_user.role == "admin":
+        queue_query = (
+            db.query(Expense)
+            .options(
+                joinedload(Expense.submitted_by_user),
+                joinedload(Expense.approval_rule).joinedload(ApprovalRule.steps),
+            )
+            .filter(
+                Expense.status == ExpenseStatus.pending,
+                Expense.company_id == current_user.company_id,
+                Expense.deleted_at.is_(None),
+            )
         )
-        .filter(
-            Expense.status == ExpenseStatus.pending,
-            Expense.company_id == current_user.company_id,
-            Expense.deleted_at.is_(None),
+    else:
+        queue_query = (
+            db.query(Expense)
+            .join(ApprovalRule, Expense.approval_rule_id == ApprovalRule.id)
+            .join(ApprovalStep, ApprovalStep.rule_id == ApprovalRule.id)
+            .join(User, Expense.submitted_by == User.id)
+            .options(
+                joinedload(Expense.submitted_by_user),
+                joinedload(Expense.approval_rule).joinedload(ApprovalRule.steps),
+            )
+            .filter(
+                Expense.status == ExpenseStatus.pending,
+                Expense.company_id == current_user.company_id,
+                Expense.deleted_at.is_(None),
+                ApprovalStep.step_order == Expense.current_step,
+                ApprovalStep.deleted_at.is_(None),
+            )
+        )
+        queue_query = queue_query.filter(
             or_(
-                ApprovalStep.approver_user_id == current_user.id,
                 and_(
                     ApprovalStep.is_manager_approver == True,
-                    expense_user.manager_id == current_user.id,
+                    User.manager_id == current_user.id
+                ),
+                and_(
+                    ApprovalStep.is_manager_approver == True,
+                    User.manager_id.is_(None),
+                    ApprovalStep.approver_user_id == current_user.id
+                ),
+                and_(
+                    ApprovalStep.is_manager_approver == False,
+                    ApprovalStep.approver_user_id == current_user.id
                 )
-            ),
-            ApprovalStep.step_order == Expense.current_step,
-            ApprovalStep.deleted_at.is_(None),
+            )
         )
-        .all()
-    )
+
+    pending_expenses = queue_query.all()
 
     # Get company currency
     company = db.query(Company).filter(Company.id == current_user.company_id).first()
@@ -72,7 +96,7 @@ def get_approval_queue(
 
     result = []
     for exp in pending_expenses:
-        active_steps = [s for s in exp.approval_rule.steps if s.deleted_at is None]
+        active_steps = [s for s in exp.approval_rule.steps if s.deleted_at is None] if exp.approval_rule else []
         result.append(
             ApprovalQueueItem(
                 expense_id=exp.id,
@@ -130,6 +154,7 @@ def decide_approval(
             user_id=current_user.id,
             decision=payload.decision.value,
             comment=payload.comment,
+            allow_override=(current_user.role == "admin"),
             db=db,
         )
     except NotCurrentApproverError as e:

@@ -270,8 +270,12 @@ function Drawer({ expense, onClose, onDecision }) {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+import { useAuth } from "../../App";
+
 export default function ApprovalQueue() {
   const toast = useToast();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
 
   const [queue,            setQueue]            = useState([]);
   const [loading,          setLoading]          = useState(true);
@@ -396,9 +400,13 @@ export default function ApprovalQueue() {
         {/* ── Page header ──────────────────────────────────────────────────── */}
         <div style={styles.pageHeader}>
           <div>
-            <h1 style={styles.pageTitle}>Approval Queue</h1>
+            <h1 style={styles.pageTitle}>
+              {isAdmin ? "Company Approvals" : "Approval Queue"}
+            </h1>
             <p style={styles.pageSubtitle}>
-              Review and action pending expense submissions assigned to you.
+              {isAdmin
+                ? "Review and override all pending expense submissions for the company."
+                : "Review and action pending expense submissions assigned to you."}
             </p>
           </div>
           <div style={styles.queueBadge}>
@@ -417,9 +425,13 @@ export default function ApprovalQueue() {
         {!loading && queue.length === 0 && (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>✓</div>
-            <p style={styles.emptyTitle}>Queue is clear</p>
+            <p style={styles.emptyTitle}>
+              {isAdmin ? "Zero pending approvals" : "Queue is clear"}
+            </p>
             <p style={styles.emptySubtitle}>
-              No expenses are pending your approval right now. Check back later.
+              {isAdmin 
+                ? "There are currently no pending expenses for your company." 
+                : "No expenses are pending your approval right now. Check back later."}
             </p>
           </div>
         )}

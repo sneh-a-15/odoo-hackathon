@@ -10,7 +10,6 @@ from app.schemas.approval_rule import (
     ApprovalRuleCreate,
     ApprovalRuleUpdate,
     ApprovalRuleResponse,
-    ApprovalRuleListItem,
 )
 
 router = APIRouter(prefix="/approval-rules", tags=["approval-rules"])
@@ -61,6 +60,22 @@ def create_approval_rule(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
+    from sqlalchemy import func
+
+    # Soft-delete any existing active rules for this company (singleton enforcement)
+    existing_rules = (
+        db.query(ApprovalRule)
+        .filter(
+            ApprovalRule.company_id == admin.company_id,
+            ApprovalRule.deleted_at.is_(None)
+        )
+        .all()
+    )
+    for existing in existing_rules:
+        existing.deleted_at = func.now()
+    if existing_rules:
+        db.flush()
+
     # Validate key_approver_id if provided
     if payload.key_approver_id:
         _validate_user_in_company(payload.key_approver_id, admin.company_id, db, label="Key approver")
@@ -86,7 +101,7 @@ def create_approval_rule(
 
 # ─── GET /approval-rules ─────────────────────────────────────────────────────
 
-@router.get("", response_model=List[ApprovalRuleListItem])
+@router.get("", response_model=List[ApprovalRuleResponse])
 def list_approval_rules(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
@@ -100,19 +115,9 @@ def list_approval_rules(
         )
         .all()
     )
-
-    result = []
-    for rule in rules:
-        active_steps = [s for s in rule.steps if s.deleted_at is None]
-        result.append(
-            ApprovalRuleListItem(
-                id=rule.id,
-                name=rule.name,
-                rule_type=rule.rule_type.value if hasattr(rule.rule_type, 'value') else rule.rule_type,
-                steps_count=len(active_steps),
-            )
-        )
-    return result
+    # The DB models automatically map to the response model, but we should just return the ORM list
+    # since from_attributes=True is turned on for ApprovalRuleResponse and its nested schemas.
+    return rules
 
 
 # ─── PATCH /approval-rules/{rule_id} ─────────────────────────────────────────

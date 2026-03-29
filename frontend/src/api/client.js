@@ -1,4 +1,5 @@
 import axios from "axios";
+import { emitGlobalToast } from "../components/ui/UICore";
 
 // ─── Base Instance ─────────────────────────────────────────────────────────────
 
@@ -29,7 +30,14 @@ client.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ─── Response interceptor — normalise errors ──────────────────────────────────
+// ─── Response interceptor — normalise errors + global toast ───────────────────
+
+const STATUS_TITLES = {
+  403: "Access denied",
+  404: "Not found",
+  422: "Validation error",
+  500: "Server error",
+};
 
 client.interceptors.response.use(
   (response) => response,
@@ -71,6 +79,15 @@ client.interceptors.response.use(
 
     // Attach the clean message so consumers can do: error.message
     error.message = message;
+
+    // Fire global toast for non-401 errors
+    if (status && status !== 401) {
+      const title = STATUS_TITLES[status] || `Error ${status}`;
+      emitGlobalToast("error", title, message);
+    } else if (!status) {
+      // Network errors
+      emitGlobalToast("error", "Connection error", message);
+    }
 
     return Promise.reject(error);
   }

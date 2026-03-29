@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useCallback, forwardRef } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, forwardRef } from "react";
+
+// ─── Global Toast Emitter (works outside React for interceptors) ──────────────
+
+const _toastListeners = new Set();
+
+export function emitGlobalToast(type, title, message) {
+  _toastListeners.forEach((fn) => fn(type, title, message));
+}
 
 // ─── Toast Context ────────────────────────────────────────────────────────────
 
@@ -8,10 +16,16 @@ export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
   const addToast = useCallback((type, title, message) => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, type, title, message }]);
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   }, []);
+
+  // Subscribe to global emitter so axios interceptor can fire toasts
+  useEffect(() => {
+    _toastListeners.add(addToast);
+    return () => _toastListeners.delete(addToast);
+  }, [addToast]);
 
   const remove = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 

@@ -6,7 +6,7 @@ from app.models.models import (
     Company, User, Expense, ApprovalRule, ApprovalStep, ApprovalDecision,
     UserRole, ExpenseCategory, RuleType, DecisionType
 )
-from app.services.approval_service import process_decision, initialize_workflow
+from app.services.approval_service import process_decision, initialize_workflow, NotCurrentApproverError
 import uuid
 from datetime import date
 
@@ -156,3 +156,47 @@ def test_rejection_resolves_immediately(db):
 
     assert result["expense_status"] == "rejected"
     assert result["triggered_by"] == "rejection"
+
+
+def test_admin_override_approves_any_pending_step(db):
+    company = make_company(db)
+    assigned_approver = make_user(db, company.id, role=UserRole.manager)
+    admin = make_user(db, company.id, role=UserRole.admin)
+    employee = make_user(db, company.id, role=UserRole.employee)
+
+    rule = make_rule(db, company.id, RuleType.percentage, percentage=100, approvers=[assigned_approver.id])
+    expense = make_expense(db, company.id, employee.id, rule.id)
+
+    result = process_decision(
+        expense_id=expense.id,
+        user_id=admin.id,
+        decision="approved",
+        comment="Admin override approval",
+        allow_override=True,
+        db=db,
+    )
+
+    db.refresh(expense)
+    assert result["expense_status"] == "approved"
+    assert result["triggered_by"] == "admin_override"
+    assert expense.status.value == "approved"
+
+
+def test_non_override_user_cannot_act_outside_current_approver(db):
+    company = make_company(db)
+    assigned_approver = make_user(db, company.id, role=UserRole.manager)
+    another_manager = make_user(db, company.id, role=UserRole.manager)
+    employee = make_user(db, company.id, role=UserRole.employee)
+
+    rule = make_rule(db, company.id, RuleType.percentage, percentage=100, approvers=[assigned_approver.id])
+    expense = make_expense(db, company.id, employee.id, rule.id)
+
+    with pytest.raises(NotCurrentApproverError):
+        process_decision(
+            expense_id=expense.id,
+            user_id=another_manager.id,
+            decision="approved",
+            comment="Trying to approve",
+            allow_override=False,
+            db=db,
+        )

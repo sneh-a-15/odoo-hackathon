@@ -128,7 +128,6 @@ function AuthProvider({ children }) {
     userStorage.clear();
     setToken(null);
     setUser(null);
-    setUser(null);
   }, []);
 
   const isAuthenticated = Boolean(token);

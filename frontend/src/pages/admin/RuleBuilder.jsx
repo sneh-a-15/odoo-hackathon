@@ -158,6 +158,8 @@ export default function RuleBuilder() {
 
   const [approvers,       setApprovers]       = useState([]);
   const [approversLoading, setApproversLoading] = useState(true);
+  const [existingRuleId,  setExistingRuleId]  = useState(null);
+  const [loadingRule,     setLoadingRule]     = useState(true);
 
   const {
     register,
@@ -183,21 +185,44 @@ export default function RuleBuilder() {
   const needsThreshold  = watchedRuleType === "percentage" || watchedRuleType === "hybrid";
   const needsApprover   = watchedRuleType === "key_approver" || watchedRuleType === "hybrid";
 
-  // ── Fetch approvers (managers + admins) ────────────────────────────────────
+  // ── Fetch approvers (managers + admins) and existing rule ──────────────────
   useEffect(() => {
     let cancelled = false;
-    client.get("/api/v1/users")
-      .then((res) => {
-        if (!cancelled) {
-          setApprovers(
-            (res.data ?? []).filter((u) => u.role === "manager" || u.role === "admin")
-          );
+    
+    Promise.all([
+      client.get("/api/v1/users"),
+      client.get("/api/v1/approval-rules")
+    ])
+      .then(([usersRes, rulesRes]) => {
+        if (cancelled) return;
+        setApprovers((usersRes.data ?? []).filter((u) => u.role === "manager" || u.role === "admin"));
+        
+        if (rulesRes.data && rulesRes.data.length > 0) {
+          const rule = rulesRes.data[0];
+          setExistingRuleId(rule.id);
+          reset({
+            name: rule.name,
+            rule_type: rule.rule_type,
+            percentage_threshold: rule.percentage_threshold,
+            key_approver_id: rule.key_approver_id,
+            steps: rule.steps.length > 0 ? rule.steps.map(s => ({
+              approver_user_id: s.approver_user_id,
+              step_order: s.step_order,
+              is_manager_approver: s.is_manager_approver,
+            })) : [{ approver_user_id: "", step_order: 1, is_manager_approver: false }],
+          });
         }
       })
-      .catch((err) => toast.error("Failed to load users", err.message))
-      .finally(() => { if (!cancelled) setApproversLoading(false); });
+      .catch((err) => toast.error("Failed to load data", err.message))
+      .finally(() => { 
+        if (!cancelled) { 
+          setApproversLoading(false); 
+          setLoadingRule(false); 
+        } 
+      });
+      
     return () => { cancelled = true; };
-  }, []);
+  }, [reset, toast]);
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   const onSubmit = async (data) => {
@@ -215,11 +240,16 @@ export default function RuleBuilder() {
     };
 
     try {
-      await client.post("/api/v1/approval-rules", payload);
-      toast.success("Rule created!", `"${payload.name}" is now active.`);
-      reset();
+      if (existingRuleId) {
+        await client.patch(`/api/v1/approval-rules/${existingRuleId}`, payload);
+        toast.success("Rule updated!", `"${payload.name}" is now the active rule.`);
+      } else {
+        const res = await client.post("/api/v1/approval-rules", payload);
+        setExistingRuleId(res.data.id);
+        toast.success("Rule created!", `"${payload.name}" is now the active rule.`);
+      }
     } catch (err) {
-      toast.error("Failed to create rule", err.message);
+      toast.error("Failed to save rule", err.message);
     }
   };
 
@@ -248,7 +278,21 @@ export default function RuleBuilder() {
         )}
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {existingRuleId && (
+        <div style={{ background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.2)", padding: "12px 16px", borderRadius: 8, marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ color: "#eab308", fontWeight: 700, fontSize: 16 }}>⚠</span>
+          <span style={{ fontSize: 13, color: "#fef08a", lineHeight: 1.5 }}>
+            <strong>Active Rule Loaded</strong> — You are editing the company's single active approval rule. Any changes saved here will immediately overwrite the current rule.
+          </span>
+        </div>
+      )}
+
+      {loadingRule && (
+        <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>Loading your rule configuration...</div>
+      )}
+
+      {!loadingRule && (
+        <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
         {/* ── Section 1: Basic info ───────────────────────────────────────── */}
         <section style={styles.card}>
@@ -467,20 +511,17 @@ export default function RuleBuilder() {
           )}
         </section>
 
-        {/* ── Form footer ─────────────────────────────────────────────────── */}
         <div style={styles.formFooter}>
           <span style={styles.requiredNote}>* Required fields</span>
           <div style={{ display: "flex", gap: 10 }}>
-            <Button type="button" variant="ghost" onClick={() => reset()}>
-              Clear form
-            </Button>
             <Button type="submit" loading={isSubmitting}>
-              Save rule
+              {existingRuleId ? "Update rule" : "Create rule"}
             </Button>
           </div>
         </div>
 
       </form>
+      )}
     </div>
   );
 }

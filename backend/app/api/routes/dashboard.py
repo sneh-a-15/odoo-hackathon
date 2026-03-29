@@ -23,8 +23,24 @@ from app.models.models import User
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-SUMMARY_SQL = text("""
+def get_summary_sql(role: str) -> str:
+    user_scope_filter = ""
+    if role == "employee":
+        user_scope_filter = "AND submitted_by = :uid"
+    elif role == "manager":
+        user_scope_filter = "AND submitted_by IN (SELECT id FROM users WHERE manager_id = :uid OR id = :uid)"
+
+    return text(f"""
 WITH
+-- ─── CTE 0: Scoped Expenses ──────────────────────────────────────────
+scoped_expenses AS (
+    SELECT *
+    FROM expenses
+    WHERE company_id = :cid 
+      AND deleted_at IS NULL
+      {user_scope_filter}
+),
+
 -- ─── CTE 1: Status KPIs ──────────────────────────────────────────────
 status_counts AS (
     SELECT
@@ -43,8 +59,7 @@ status_counts AS (
                  ELSE 0
             END, 1
         )                                                          AS approval_rate
-    FROM expenses
-    WHERE company_id = :cid AND deleted_at IS NULL
+    FROM scoped_expenses
 ),
 
 -- ─── CTE 2: Spend by Category ────────────────────────────────────────
@@ -54,16 +69,13 @@ by_category AS (
         COUNT(*)                                                   AS cat_count,
         COALESCE(SUM(converted_amount), 0)                         AS cat_spend,
         ROUND(
-            CASE WHEN (SELECT COALESCE(SUM(converted_amount), 1) FROM expenses
-                       WHERE company_id = :cid AND deleted_at IS NULL) > 0
+            CASE WHEN (SELECT COALESCE(SUM(converted_amount), 1) FROM scoped_expenses) > 0
                  THEN SUM(converted_amount) * 100.0
-                      / (SELECT COALESCE(SUM(converted_amount), 1) FROM expenses
-                         WHERE company_id = :cid AND deleted_at IS NULL)
+                      / (SELECT COALESCE(SUM(converted_amount), 1) FROM scoped_expenses)
                  ELSE 0
             END, 1
         )                                                          AS cat_pct
-    FROM expenses
-    WHERE company_id = :cid AND deleted_at IS NULL
+    FROM scoped_expenses
     GROUP BY category
     ORDER BY cat_spend DESC
 ),
@@ -71,15 +83,13 @@ by_category AS (
 -- ─── CTE 3: Monthly Trend (last 6 months) ────────────────────────────
 monthly_trend AS (
     SELECT
-        TO_CHAR(DATE_TRUNC('month', expense_date), 'YYYY-MM')      AS month,
-        TO_CHAR(DATE_TRUNC('month', expense_date), 'Mon YYYY')     AS month_label,
+        TO_CHAR(DATE_TRUNC('month', expense_date), 'YYYY-MM')       AS month,
+        TO_CHAR(DATE_TRUNC('month', expense_date), 'Mon YYYY')      AS month_label,
         COUNT(*)                                                    AS month_count,
         COALESCE(SUM(converted_amount), 0)                          AS month_spend,
         ROW_NUMBER() OVER (ORDER BY DATE_TRUNC('month', expense_date) DESC) AS rn
-    FROM expenses
-    WHERE company_id = :cid
-      AND deleted_at IS NULL
-      AND expense_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 months'
+    FROM scoped_expenses
+    WHERE expense_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 months'
     GROUP BY DATE_TRUNC('month', expense_date)
     ORDER BY month ASC
 ),
@@ -91,9 +101,8 @@ top_spenders AS (
         COUNT(e.id)                                                AS expense_count,
         COALESCE(SUM(e.converted_amount), 0)                       AS total_spent,
         ROW_NUMBER() OVER (ORDER BY SUM(e.converted_amount) DESC NULLS LAST) AS rn
-    FROM expenses e
+    FROM scoped_expenses e
     JOIN users u ON u.id = e.submitted_by
-    WHERE e.company_id = :cid AND e.deleted_at IS NULL
     GROUP BY u.id, u.full_name
 )
 
@@ -145,9 +154,14 @@ def get_dashboard_summary(
     Single-query dashboard analytics using CTEs.
     All aggregation is done in Postgres — zero Python loops.
     """
-    row = db.execute(SUMMARY_SQL, {"cid": current_user.company_id}).mappings().first()
+    
+    role_str = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    sql = get_summary_sql(role_str)
+    
+    params = {"cid": current_user.company_id, "uid": current_user.id}
+    row = db.execute(sql, params).mappings().first()
 
-    if not row:
+    if not row or row["total_expenses"] is None or row["total_expenses"] == 0:
         # No data yet — return zeroed response
         return {
             "kpis": {

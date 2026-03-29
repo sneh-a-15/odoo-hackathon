@@ -1,0 +1,71 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.security import hash_password, verify_password, create_access_token
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+from app.models.models import User, Company, UserRole
+import httpx
+import uuid
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+async def get_currency_for_country(country_code: str) -> str:
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get("https://restcountries.com/v3.1/all?fields=name,currencies,cca2")
+            countries = r.json()
+            for c in countries:
+                if c.get("cca2") == country_code.upper():
+                    currencies = c.get("currencies", {})
+                    if currencies:
+                        return list(currencies.keys())[0]
+    except Exception:
+        pass
+    return "USD"  # fallback
+
+@router.post("/register", response_model=TokenResponse)
+async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == payload.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    currency = await get_currency_for_country(payload.country_code)
+
+    company = Company(
+        name=payload.company_name,
+        country_code=payload.country_code.upper(),
+        default_currency=currency,
+    )
+    db.add(company)
+    db.flush()
+
+    user = User(
+        company_id=company.id,
+        email=payload.email,
+        full_name=payload.full_name,
+        hashed_password=hash_password(payload.password),
+        role=UserRole.admin,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token({"sub": str(user.id), "role": user.role, "company_id": str(company.id)})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": str(user.id), "email": user.email, "role": user.role, "company_id": str(company.id)}
+    }
+
+@router.post("/login", response_model=TokenResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token({"sub": str(user.id), "role": user.role, "company_id": str(user.company_id)})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": str(user.id), "email": user.email, "role": user.role, "company_id": str(user.company_id)}
+    }

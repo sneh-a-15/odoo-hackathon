@@ -55,7 +55,7 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": str(user.id), "email": user.email, "full_name": user.full_name, "role": user.role, "company_id": str(company.id)}
+        "user": {"id": str(user.id), "email": user.email, "full_name": user.full_name, "role": user.role, "company_id": str(company.id), "company_currency": company.default_currency}
     }
 
 @router.post("/login", response_model=TokenResponse)
@@ -64,20 +64,23 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    company = db.query(Company).filter(Company.id == user.company_id).first()
     token = create_access_token({"sub": str(user.id), "role": user.role, "company_id": str(user.company_id)})
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": str(user.id), "email": user.email, "full_name": user.full_name, "role": user.role, "company_id": str(user.company_id)}
+        "user": {"id": str(user.id), "email": user.email, "full_name": user.full_name, "role": user.role, "company_id": str(user.company_id), "company_currency": company.default_currency if company else "USD"}
     }
 
 @router.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    company = db.query(Company).filter(Company.id == current_user.company_id).first()
     return {
         "id": str(current_user.id),
         "email": current_user.email,
         "full_name": current_user.full_name,
         "role": current_user.role.value if hasattr(current_user.role, 'value') else current_user.role,
         "company_id": str(current_user.company_id),
-        "manager_id": str(current_user.manager_id) if current_user.manager_id else None
+        "manager_id": str(current_user.manager_id) if current_user.manager_id else None,
+        "company_currency": company.default_currency if company else "USD"
     }

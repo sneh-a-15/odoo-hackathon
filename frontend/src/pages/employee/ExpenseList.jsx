@@ -203,7 +203,7 @@ function DetailDrawer({ expense, history, historyLoading, onClose }) {
               </span>
               {hasConversion && (
                 <span style={{ fontSize: 13, color: "#64748b" }}>
-                  ≈ {formatCurrency(expense.converted_amount, "USD")} USD
+                  ≈ {formatCurrency(expense.converted_amount, expense.company_currency || "USD")} {expense.company_currency || "USD"}
                 </span>
               )}
               <Badge variant={STATUS_BADGE[expense.status] ?? "neutral"}>
@@ -416,7 +416,7 @@ export default function ExpenseList() {
           </span>
           {row.converted_amount != null && row.converted_amount !== v && (
             <span style={{ color: "#64748b", fontSize: 12 }}>
-              ≈ {formatCurrency(row.converted_amount, "USD")} USD
+              ≈ {formatCurrency(row.converted_amount, row.company_currency || "USD")} {row.company_currency || "USD"}
             </span>
           )}
         </div>

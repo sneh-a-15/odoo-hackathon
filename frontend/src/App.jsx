@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { tokenStorage } from "./api/client";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import UserManagement from "./pages/admin/UserManagement";
 
 //  Auth Context 
 
@@ -130,6 +131,7 @@ export default function App() {
 
           {/* Protected routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
 
           {/* Default redirect */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

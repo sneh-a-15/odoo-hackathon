@@ -341,7 +341,7 @@ export default function ExpenseList() {
     setHistory([]);
     setHistoryLoading(true);
     try {
-      const res = await client.get(`/api/v1/expenses/${expense.id}/history`);
+      const res = await client.get(`/api/v1/approvals/${expense.id}/history`);
       setHistory(res.data ?? []);
     } catch (err) {
       toast.error("Could not load timeline", err.message);

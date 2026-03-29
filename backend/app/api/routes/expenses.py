@@ -6,6 +6,7 @@ from app.core.dependencies import get_current_user
 from app.models.models import Expense, Company, User
 from app.schemas.expense import ExpenseCreate, ExpenseResponse
 from app.services.currency_service import convert_amount
+from app.services.approval_service import auto_assign_rule, NoApprovalRuleError
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
@@ -44,6 +45,13 @@ async def submit_expense(
     db.add(expense)
     db.commit()
     db.refresh(expense)
+
+    # Auto-assign approval rule so the expense enters the approval queue
+    try:
+        auto_assign_rule(expense.id, db)
+    except NoApprovalRuleError:
+        # No rule configured yet — expense is saved but won't appear in queue
+        pass
 
     return {
         "id": expense.id,

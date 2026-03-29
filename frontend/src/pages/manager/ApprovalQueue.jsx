@@ -159,7 +159,7 @@ function Drawer({ expense, onClose, onDecision }) {
           <section style={styles.detailsCard}>
             <p style={styles.sectionLabel}>Expense Details</p>
             <div style={styles.detailsGrid}>
-              <DetailRow label="Submitted by">{expense.submitted_by ?? "—"}</DetailRow>
+              <DetailRow label="Submitted by">{expense.submitted_by_name ?? expense.submitted_by ?? "—"}</DetailRow>
               <DetailRow label="Step progress">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   Step {expense.current_step} of {expense.step_total}
@@ -307,9 +307,9 @@ export default function ApprovalQueue() {
       ),
     },
     {
-      key:    "submitted_by",
+      key:    "submitted_by_name",
       header: "Submitted By",
-      render: (v) => (
+      render: (v, row) => (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
             width:          28,
@@ -325,9 +325,9 @@ export default function ApprovalQueue() {
             color:          "#a78bfa",
             flexShrink:     0,
           }}>
-            {(v ?? "?")[0].toUpperCase()}
+            {(v ?? row.submitted_by ?? "?")[0].toUpperCase()}
           </span>
-          <span style={{ color: "#94a3b8", fontSize: 14 }}>{v ?? "—"}</span>
+          <span style={{ color: "#94a3b8", fontSize: 14 }}>{v ?? row.submitted_by ?? "—"}</span>
         </div>
       ),
     },

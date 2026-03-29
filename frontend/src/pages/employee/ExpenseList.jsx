@@ -329,7 +329,7 @@ export default function ExpenseList() {
   useEffect(() => {
     let cancelled = false;
     client.get("/api/v1/expenses")
-      .then((res) => { if (!cancelled) setExpenses(res.data ?? []); })
+      .then((res) => { if (!cancelled) setExpenses(res.data?.items ?? []); })
       .catch((err) => toast.error("Failed to load expenses", err.message))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

@@ -91,7 +91,7 @@ export default function Register() {
       const { confirm_password, ...payload } = data;
       const res = await client.post("/api/v1/auth/register", payload);
 
-      login(res.data.access_token);
+      login(res.data.access_token, res.data.user);
       toast.success("Account created!", "Welcome to ExpenseFlow.");
       navigate("/dashboard");
     } catch (err) {

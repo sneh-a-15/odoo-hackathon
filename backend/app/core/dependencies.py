@@ -25,3 +25,8 @@ def require_manager(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Manager access required")
     return current_user
+
+def require_employee(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "employee":
+        raise HTTPException(status_code=403, detail="Only employees can submit expenses")
+    return current_user

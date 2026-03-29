@@ -20,24 +20,36 @@ export function useAuth() {
   return ctx;
 }
 
-function AuthProvider({ children }) {
-  // Initialize from localStorage so a page refresh keeps the user logged in
-  const [token, setToken] = useState(() => tokenStorage.get());
+// Helpers to persist user info alongside the token
+const userStorage = {
+  get:   () => { try { return JSON.parse(localStorage.getItem("user_info")); } catch { return null; } },
+  set:   (u) => localStorage.setItem("user_info", JSON.stringify(u)),
+  clear: () => localStorage.removeItem("user_info"),
+};
 
-  const login = useCallback((newToken) => {
+function AuthProvider({ children }) {
+  const [token, setToken] = useState(() => tokenStorage.get());
+  const [user, setUser]   = useState(() => userStorage.get());
+
+  const login = useCallback((newToken, userInfo) => {
     tokenStorage.set(newToken);
+    userStorage.set(userInfo);
     setToken(newToken);
+    setUser(userInfo);
   }, []);
 
   const logout = useCallback(() => {
     tokenStorage.clear();
+    userStorage.clear();
     setToken(null);
+    setUser(null);
   }, []);
 
   const isAuthenticated = Boolean(token);
+  const role = user?.role ?? null;
 
   return (
-    <AuthContext.Provider value={{ token, isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ token, user, role, isAuthenticated, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -45,22 +57,30 @@ function AuthProvider({ children }) {
 
 //  Route Guards 
 
-/** Wraps authenticated routes  redirects to /login if no token. */
+/** Redirects to /login if not authenticated. */
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 }
 
-/** Wraps guest-only routes  redirects to /dashboard if already logged in. */
+/** Redirects to /dashboard if already logged in. */
 function GuestRoute({ children }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <Navigate to="/dashboard" replace /> : children;
 }
 
+/** Redirects to /dashboard if user's role is not in the allowed list. */
+function RoleRoute({ allowed, children }) {
+  const { isAuthenticated, role } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!allowed.includes(role)) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 //  Placeholder Dashboard 
 
 function Dashboard() {
-  const { logout } = useAuth();
+  const { logout, role } = useAuth();
 
   return (
     <div style={{
@@ -99,7 +119,7 @@ function Dashboard() {
       </h1>
 
       <p style={{ margin: 0, color: "#64748b", fontSize: 15 }}>
-        You are successfully authenticated. Build something great 
+        You are signed in as <span style={{ color: "#a78bfa", fontWeight: 600 }}>{role}</span>
       </p>
 
       <button
@@ -133,13 +153,21 @@ export default function App() {
           <Route path="/login"    element={<GuestRoute><Login /></GuestRoute>} />
           <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
 
-          {/* Protected routes */}
+          {/* Dashboard — all authenticated users */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/admin/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
-          <Route path="/admin/rules" element={<ProtectedRoute><RuleBuilder /></ProtectedRoute>} />
-          <Route path="/expenses" element={<ProtectedRoute><ExpenseList /></ProtectedRoute>} />
-          <Route path="/expenses/submit" element={<ProtectedRoute><SubmitExpense /></ProtectedRoute>} />
-          <Route path="/manager/queue" element={<ProtectedRoute><ApprovalQueue /></ProtectedRoute>} />
+
+          {/* Admin-only: manage users, configure approval rules */}
+          <Route path="/admin/users" element={<RoleRoute allowed={["admin"]}><UserManagement /></RoleRoute>} />
+          <Route path="/admin/rules" element={<RoleRoute allowed={["admin"]}><RuleBuilder /></RoleRoute>} />
+
+          {/* Employee-only: submit expenses */}
+          <Route path="/expenses/submit" element={<RoleRoute allowed={["employee"]}><SubmitExpense /></RoleRoute>} />
+
+          {/* View expenses: employee (own) + manager (team) + admin (all) */}
+          <Route path="/expenses" element={<RoleRoute allowed={["employee", "manager", "admin"]}><ExpenseList /></RoleRoute>} />
+
+          {/* Approval queue: manager + admin (override) */}
+          <Route path="/manager/queue" element={<RoleRoute allowed={["manager", "admin"]}><ApprovalQueue /></RoleRoute>} />
 
           {/* Default redirect */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -148,3 +176,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+

@@ -33,7 +33,7 @@ export default function Login() {
       // but our custom /auth/login accepts JSON — use JSON.
       const res = await client.post("/api/v1/auth/login", data);
 
-      login(res.data.access_token);
+      login(res.data.access_token, res.data.user);
       toast.success("Welcome back!", `Logged in as ${res.data.user?.email ?? data.email}`);
       navigate("/dashboard");
     } catch (err) {

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from uuid import UUID
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_employee
 from app.models.models import Expense, Company, User
 from app.schemas.expense import ExpenseCreate, ExpenseResponse
 from app.services.currency_service import convert_amount
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/expenses", tags=["expenses"])
 async def submit_expense(
     payload: ExpenseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_employee)
 ):
     company = db.query(Company).filter(Company.id == current_user.company_id).first()
     if not company:
@@ -81,6 +81,16 @@ def get_expenses(
     # employees only see their own
     if current_user.role == "employee":
         query = query.filter(Expense.submitted_by == current_user.id)
+    # managers see only their direct reports' expenses
+    elif current_user.role == "manager":
+        team_ids = (
+            db.query(User.id)
+            .filter(User.manager_id == current_user.id, User.deleted_at.is_(None))
+            .all()
+        )
+        team_id_list = [uid for (uid,) in team_ids]
+        query = query.filter(Expense.submitted_by.in_(team_id_list))
+    # admin sees all company expenses (no extra filter)
 
     if status:
         query = query.filter(Expense.status == status)

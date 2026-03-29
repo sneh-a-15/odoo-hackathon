@@ -48,6 +48,15 @@ const schema = z
         message: "Key approver is required for this rule type",
       });
     }
+    
+    const managerApprovers = data.steps.filter(s => s.is_manager_approver).length;
+    if (managerApprovers > 1) {
+      ctx.addIssue({
+        path: ["steps"],
+        code: z.ZodIssueCode.custom,
+        message: "Only one step can be assigned as the Manager approver.",
+      });
+    }
   });
 
 // ─── Rule type config ──────────────────────────────────────────────────────────
@@ -105,24 +114,25 @@ function Divider() {
 }
 
 // Toggle pill for is_manager_approver
-function Toggle({ value, onChange, label }) {
+function Toggle({ value, onChange, label, disabled }) {
   return (
     <button
       type="button"
-      onClick={() => onChange(!value)}
+      onClick={() => { if (!disabled) onChange(!value); }}
       style={{
         display:        "inline-flex",
         alignItems:     "center",
         gap:            8,
         background:     "transparent",
         border:         "none",
-        cursor:         "pointer",
+        cursor:         disabled ? "not-allowed" : "pointer",
         padding:        0,
-        color:          value ? "#a78bfa" : "#64748b",
+        color:          disabled ? "#4b5563" : (value ? "#a78bfa" : "#64748b"),
         fontSize:       13,
         fontWeight:     500,
         whiteSpace:     "nowrap",
         userSelect:     "none",
+        opacity:        disabled ? 0.6 : 1,
       }}
     >
       <span style={{
@@ -134,6 +144,7 @@ function Toggle({ value, onChange, label }) {
         position:     "relative",
         transition:   "background 0.2s, border-color 0.2s",
         flexShrink:   0,
+        opacity:      disabled && !value ? 0.5 : 1,
       }}>
         <span style={{
           position:   "absolute",
@@ -142,7 +153,7 @@ function Toggle({ value, onChange, label }) {
           width:      14,
           height:     14,
           borderRadius: "50%",
-          background:   value ? "#a78bfa" : "#4b5563",
+          background:   value ? (disabled ? "#7e6cac" : "#a78bfa") : "#4b5563",
           transition: "left 0.2s, background 0.2s",
         }} />
       </span>
@@ -184,6 +195,9 @@ export default function RuleBuilder() {
   const watchedRuleType = watch("rule_type");
   const needsThreshold  = watchedRuleType === "percentage" || watchedRuleType === "hybrid";
   const needsApprover   = watchedRuleType === "key_approver" || watchedRuleType === "hybrid";
+
+  const stepsWatch = watch("steps");
+  const hasManagerIndex = stepsWatch?.findIndex(s => s.is_manager_approver) ?? -1;
 
   // ── Fetch approvers (managers + admins) and existing rule ──────────────────
   useEffect(() => {
@@ -465,13 +479,17 @@ export default function RuleBuilder() {
                   <Controller
                     control={control}
                     name={`steps.${index}.is_manager_approver`}
-                    render={({ field: f }) => (
-                      <Toggle
-                        value={f.value}
-                        onChange={f.onChange}
-                        label={f.value ? "Yes" : "No"}
-                      />
-                    )}
+                    render={({ field: f }) => {
+                      const isDisabled = hasManagerIndex !== -1 && hasManagerIndex !== index;
+                      return (
+                        <Toggle
+                          value={f.value}
+                          onChange={f.onChange}
+                          label={f.value ? "Yes" : "No"}
+                          disabled={isDisabled}
+                        />
+                      );
+                    }}
                   />
                 </div>
 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, aliased
+from sqlalchemy import or_, and_
 from uuid import UUID
 from typing import List
 
@@ -33,16 +34,17 @@ def get_approval_queue(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager),
 ):
-    """
-    Return all pending expenses where the caller is the designated
-    approver for the current step. Uses a join through:
-      expenses → approval_rules → approval_steps
-    filtering on step_order = expense.current_step AND approver = caller.
-    """
+    # Return all pending expenses where the caller is the designated
+    # approver for the current step. Uses a join through:
+    #   expenses → approval_rules → approval_steps
+    # filtering on step_order = expense.current_step AND (approver_user_id = caller OR manager_id = caller)
+    expense_user = aliased(User)
+
     pending_expenses = (
         db.query(Expense)
         .join(ApprovalRule, Expense.approval_rule_id == ApprovalRule.id)
         .join(ApprovalStep, ApprovalStep.rule_id == ApprovalRule.id)
+        .join(expense_user, Expense.submitted_by == expense_user.id)
         .options(
             joinedload(Expense.submitted_by_user),
             joinedload(Expense.approval_rule).joinedload(ApprovalRule.steps),
@@ -51,7 +53,13 @@ def get_approval_queue(
             Expense.status == ExpenseStatus.pending,
             Expense.company_id == current_user.company_id,
             Expense.deleted_at.is_(None),
-            ApprovalStep.approver_user_id == current_user.id,
+            or_(
+                ApprovalStep.approver_user_id == current_user.id,
+                and_(
+                    ApprovalStep.is_manager_approver == True,
+                    expense_user.manager_id == current_user.id,
+                )
+            ),
             ApprovalStep.step_order == Expense.current_step,
             ApprovalStep.deleted_at.is_(None),
         )

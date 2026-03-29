@@ -174,7 +174,16 @@ def process_decision(
             f"No step found at step_order={expense.current_step} for this rule"
         )
 
-    if current_step.approver_user_id != user_id:
+    # Check if user is explicit approver or manager approver
+    is_approver = current_step.approver_user_id == user_id
+    if not is_approver and current_step.is_manager_approver:
+        # Check if user_id is the manager of the person who submitted the expense
+        from app.models.models import User
+        submitter = db.query(User).filter(User.id == expense.submitted_by).first()
+        if submitter and submitter.manager_id == user_id:
+            is_approver = True
+
+    if not is_approver:
         raise NotCurrentApproverError(
             "You are not the designated approver for the current step"
         )

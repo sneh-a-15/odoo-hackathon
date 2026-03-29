@@ -56,7 +56,7 @@ const RULE_TYPES = [
   {
     value:       "percentage",
     label:       "Percentage Threshold",
-    description: "Triggers when expense amount exceeds a % of budget",
+    description: "Auto-approves when enough approvers approve (e.g. 60%)",
     badge:       "pending",
   },
   {
@@ -331,7 +331,7 @@ export default function RuleBuilder() {
                   max={100}
                   placeholder="e.g. 75"
                   required
-                  helper="Rule triggers when expense exceeds this % of the employee's budget."
+                  helper="Expense auto-approves when this % of approvers have approved."
                   error={errors.percentage_threshold?.message}
                   {...register("percentage_threshold")}
                 />

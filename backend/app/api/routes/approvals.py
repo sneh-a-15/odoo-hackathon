@@ -6,7 +6,7 @@ from typing import List
 from app.core.database import get_db
 from app.core.dependencies import require_manager, get_current_user
 from app.models.models import (
-    Expense, ApprovalRule, ApprovalStep, ExpenseStatus, User
+    Expense, ApprovalRule, ApprovalStep, ExpenseStatus, User, Company
 )
 from app.schemas.approval import (
     ApprovalDecideRequest,
@@ -58,6 +58,10 @@ def get_approval_queue(
         .all()
     )
 
+    # Get company currency
+    company = db.query(Company).filter(Company.id == current_user.company_id).first()
+    company_currency = company.default_currency if company else "USD"
+
     result = []
     for exp in pending_expenses:
         active_steps = [s for s in exp.approval_rule.steps if s.deleted_at is None]
@@ -70,6 +74,7 @@ def get_approval_queue(
                 amount=float(exp.amount),
                 currency=exp.currency,
                 converted_amount=float(exp.converted_amount) if exp.converted_amount else None,
+                company_currency=company_currency,
                 current_step=exp.current_step,
                 step_total=len(active_steps),
                 category=exp.category.value if hasattr(exp.category, 'value') else exp.category,

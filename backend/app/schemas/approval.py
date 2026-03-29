@@ -34,6 +34,7 @@ class ApprovalQueueItem(BaseModel):
     amount: float
     currency: str
     converted_amount: Optional[float] = None
+    company_currency: Optional[str] = None
     current_step: int
     step_total: int
     category: str

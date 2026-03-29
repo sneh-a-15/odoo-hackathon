@@ -187,9 +187,9 @@ function Drawer({ expense, onClose, onDecision }) {
                 </span>
               </DetailRow>
               {hasConversion && (
-                <DetailRow label="Converted (USD)">
+                <DetailRow label={`Converted (${expense.company_currency || "USD"})`}>
                   <span style={{ color: "#a78bfa" }}>
-                    {formatCurrency(expense.converted_amount, "USD")}
+                    {formatCurrency(expense.converted_amount, expense.company_currency || "USD")}
                   </span>
                 </DetailRow>
               )}
@@ -341,7 +341,7 @@ export default function ApprovalQueue() {
           </span>
           {row.converted_amount != null && row.converted_amount !== v && (
             <span style={{ color: "#64748b", fontSize: 12 }}>
-              ≈ {formatCurrency(row.converted_amount, "USD")} USD
+              ≈ {formatCurrency(row.converted_amount, row.company_currency || "USD")} {row.company_currency || "USD"}
             </span>
           )}
         </div>

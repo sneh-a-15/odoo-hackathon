@@ -18,7 +18,7 @@ from sqlalchemy import text
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.models.models import User
+from app.models.models import User, Company
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -160,6 +160,9 @@ def get_dashboard_summary(
     
     params = {"cid": current_user.company_id, "uid": current_user.id}
     row = db.execute(sql, params).mappings().first()
+    
+    company = db.query(Company).filter(Company.id == current_user.company_id).first()
+    company_currency = company.default_currency if company else "USD"
 
     if not row or row["total_expenses"] is None or row["total_expenses"] == 0:
         # No data yet — return zeroed response
@@ -177,6 +180,7 @@ def get_dashboard_summary(
             "category_breakdown": [],
             "monthly_trend": [],
             "top_spenders": [],
+            "company_currency": company_currency,
         }
 
     return {
@@ -193,4 +197,5 @@ def get_dashboard_summary(
         "category_breakdown": row["category_breakdown"],
         "monthly_trend":      row["monthly_trend"],
         "top_spenders":       row["top_spenders"],
+        "company_currency":   company_currency,
     }

@@ -50,14 +50,17 @@ const CAT_CONFIG = {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtCurrency(n, compact = false) {
+function fmtCurrency(n, currency = "USD", compact = false) {
   if (n == null) return "—";
+  const formatter = new Intl.NumberFormat("en-US", {
+    style: "currency", currency, maximumFractionDigits: 0,
+  });
   if (compact && n >= 1000) {
-    return "$" + (n / 1000).toFixed(1) + "k";
+    const parts = formatter.formatToParts(0);
+    const symbol = parts.find(p => p.type === 'currency')?.value || '$';
+    return symbol + (n / 1000).toFixed(1) + "k";
   }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency", currency: "USD", maximumFractionDigits: 0,
-  }).format(n);
+  return formatter.format(n);
 }
 
 function fmtPct(n) {
@@ -75,7 +78,7 @@ function Sk({ w = "100%", h = 14, r = 6 }) {
 
 // ─── Custom chart tooltip ──────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label, prefix = "$", suffix = "" }) {
+function ChartTooltip({ active, payload, label, currency = "USD", suffix = "" }) {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
@@ -92,7 +95,7 @@ function ChartTooltip({ active, payload, label, prefix = "$", suffix = "" }) {
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, display: "inline-block" }} />
           <span style={{ color: C.textMid }}>{p.name}:</span>
           <span style={{ fontWeight: 700 }}>
-            {prefix}{typeof p.value === "number" ? p.value.toLocaleString() : p.value}{suffix}
+            {typeof p.value === "number" ? fmtCurrency(p.value, currency) : p.value}{suffix}
           </span>
         </div>
       ))}
@@ -202,7 +205,7 @@ function ChartCard({ children, style }) {
 
 // ─── Category bar chart ────────────────────────────────────────────────────────
 
-function CategoryBarChart({ data, loading }) {
+function CategoryBarChart({ data, loading, currency }) {
   if (loading) {
     return (
       <ChartCard>
@@ -242,10 +245,10 @@ function CategoryBarChart({ data, loading }) {
             tick={{ fill: C.textDim, fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => fmtCurrency(v, true)}
+            tickFormatter={(v) => fmtCurrency(v, currency, true)}
           />
           <Tooltip
-            content={<ChartTooltip prefix="$" />}
+            content={<ChartTooltip currency={currency} />}
             cursor={{ fill: "rgba(255,255,255,0.03)" }}
           />
           <Bar dataKey="spend" name="Spend" radius={[4, 4, 0, 0]} maxBarSize={52}>
@@ -279,7 +282,7 @@ function CategoryBarChart({ data, loading }) {
 
 // ─── Monthly area chart ────────────────────────────────────────────────────────
 
-function MonthlyTrendChart({ data, loading }) {
+function MonthlyTrendChart({ data, loading, currency }) {
   if (loading) {
     return (
       <ChartCard>
@@ -314,9 +317,9 @@ function MonthlyTrendChart({ data, loading }) {
             tick={{ fill: C.textDim, fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => fmtCurrency(v, true)}
+            tickFormatter={(v) => fmtCurrency(v, currency, true)}
           />
-          <Tooltip content={<ChartTooltip prefix="$" />} cursor={{ stroke: C.borderHi, strokeWidth: 1 }} />
+          <Tooltip content={<ChartTooltip currency={currency} />} cursor={{ stroke: C.borderHi, strokeWidth: 1 }} />
           <Area
             type="monotone"
             dataKey="spend"
@@ -335,7 +338,7 @@ function MonthlyTrendChart({ data, loading }) {
 
 // ─── Top spenders leaderboard ──────────────────────────────────────────────────
 
-function TopSpenders({ data, loading }) {
+function TopSpenders({ data, loading, currency }) {
   const max = data.reduce((m, d) => Math.max(m, d.total_spent), 0);
 
   return (
@@ -407,7 +410,7 @@ function TopSpenders({ data, loading }) {
 
                 {/* Amount */}
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: "nowrap", flexShrink: 0 }}>
-                  {fmtCurrency(person.total_spent)}
+                  {fmtCurrency(person.total_spent, currency)}
                 </div>
               </div>
             );
@@ -634,7 +637,7 @@ export default function Dashboard() {
       <div style={styles.kpiGrid}>
         <KpiCard
           label="Total Spend"
-          value={loading ? null : fmtCurrency(kpis.total_spend)}
+          value={loading ? null : fmtCurrency(kpis.total_spend, summary?.company_currency)}
           sub={`${kpis.total_expenses ?? "—"} total expenses`}
           accent={C.purple}
           icon="💰"
@@ -642,7 +645,7 @@ export default function Dashboard() {
         />
         <KpiCard
           label="Approved Spend"
-          value={loading ? null : fmtCurrency(kpis.approved_spend)}
+          value={loading ? null : fmtCurrency(kpis.approved_spend, summary?.company_currency)}
           sub={`${kpis.approved_count ?? "—"} approved`}
           accent={C.green}
           icon="✅"
@@ -650,7 +653,7 @@ export default function Dashboard() {
         />
         <KpiCard
           label="Pending Spend"
-          value={loading ? null : fmtCurrency(kpis.pending_spend)}
+          value={loading ? null : fmtCurrency(kpis.pending_spend, summary?.company_currency)}
           sub={`${kpis.pending_count ?? "—"} awaiting review`}
           accent={C.amber}
           icon="⏳"
@@ -670,10 +673,10 @@ export default function Dashboard() {
       <Section title="Spend Analytics" subtitle="Category distribution and monthly trend">
         <div style={styles.chartsRow}>
           <div style={{ flex: "1 1 340px", minWidth: 0 }}>
-            <CategoryBarChart data={catData} loading={loading} />
+            <CategoryBarChart data={catData} loading={loading} currency={summary?.company_currency} />
           </div>
           <div style={{ flex: "1 1 300px", minWidth: 0 }}>
-            <MonthlyTrendChart data={monthly} loading={loading} />
+            <MonthlyTrendChart data={monthly} loading={loading} currency={summary?.company_currency} />
           </div>
         </div>
       </Section>
@@ -684,7 +687,7 @@ export default function Dashboard() {
         {/* Top spenders */}
         <div style={{ flex: "0 0 320px", minWidth: 0 }}>
           <Section title="Top Spenders" subtitle="By total submitted amount">
-            <TopSpenders data={spenders} loading={loading} />
+            <TopSpenders data={spenders} loading={loading} currency={summary?.company_currency} />
           </Section>
         </div>
 

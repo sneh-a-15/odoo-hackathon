@@ -148,17 +148,180 @@ function useConversionPreview() {
   return { preview, fetchPreview, clearPreview: () => setPreview(null) };
 }
 
+// ─── Receipt Upload Zone ───────────────────────────────────────────────────────
+
+function ReceiptUploadZone({ onOcrResult, ocrLoading, ocrResult }) {
+  const [dragActive, setDragActive] = useState(false);
+  const [file, setFile] = useState(null);
+  const inputRef = useRef(null);
+
+  const handleFile = useCallback(async (selectedFile) => {
+    if (!selectedFile) return;
+
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/tiff", "image/bmp"];
+    if (!allowed.includes(selectedFile.type)) {
+      return;
+    }
+
+    setFile(selectedFile);
+    onOcrResult(selectedFile);
+  }, [onOcrResult]);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files?.[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  }, [handleFile]);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = () => setDragActive(false);
+
+  const confidenceColors = {
+    high: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.3)", text: "#4ade80" },
+    medium: { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.3)", text: "#fbbf24" },
+    low: { bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.3)", text: "#f87171" },
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <label style={styles.fieldLabel}>
+        Receipt scan (OCR)
+      </label>
+
+      {/* Drop zone */}
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onClick={() => inputRef.current?.click()}
+        style={{
+          border: `2px dashed ${dragActive ? "#7c3aed" : ocrResult ? "#22c55e33" : "#2d3448"}`,
+          borderRadius: 10,
+          padding: ocrLoading ? "32px 20px" : "24px 20px",
+          textAlign: "center",
+          cursor: ocrLoading ? "wait" : "pointer",
+          background: dragActive ? "rgba(124,58,237,0.06)" : ocrResult ? "rgba(34,197,94,0.04)" : "#0f1117",
+          transition: "all 0.2s",
+        }}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/tiff,image/bmp"
+          style={{ display: "none" }}
+          onChange={(e) => handleFile(e.target.files?.[0])}
+        />
+
+        {ocrLoading ? (
+          /* Scanning spinner */
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              border: "3px solid #1e2330", borderTopColor: "#7c3aed",
+              animation: "spin 0.8s linear infinite",
+            }} />
+            <span style={{ color: "#a78bfa", fontSize: 13, fontWeight: 600 }}>
+              Scanning receipt…
+            </span>
+            <span style={{ color: "#475569", fontSize: 12 }}>
+              Extracting text and parsing fields
+            </span>
+          </div>
+        ) : ocrResult ? (
+          /* Success state */
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(34,197,94,0.15)", color: "#4ade80",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 18, fontWeight: 700,
+            }}>✓</div>
+            <span style={{ color: "#94a3b8", fontSize: 13 }}>
+              {file?.name || "Receipt scanned"}
+            </span>
+            {ocrResult.parsed_fields && (
+              <div style={{
+                display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 4,
+              }}>
+                {ocrResult.parsed_fields.vendor && (
+                  <span style={styles.ocrTag}>🏪 {ocrResult.parsed_fields.vendor}</span>
+                )}
+                {ocrResult.parsed_fields.amount && (
+                  <span style={styles.ocrTag}>
+                    💰 {ocrResult.parsed_fields.currency || "$"}{ocrResult.parsed_fields.amount}
+                  </span>
+                )}
+                {ocrResult.parsed_fields.date && (
+                  <span style={styles.ocrTag}>📅 {ocrResult.parsed_fields.date}</span>
+                )}
+                {ocrResult.parsed_fields.confidence && (
+                  <span style={{
+                    ...styles.ocrTag,
+                    background: confidenceColors[ocrResult.parsed_fields.confidence]?.bg,
+                    borderColor: confidenceColors[ocrResult.parsed_fields.confidence]?.border,
+                    color: confidenceColors[ocrResult.parsed_fields.confidence]?.text,
+                  }}>
+                    {ocrResult.parsed_fields.confidence === "high" ? "🎯" : ocrResult.parsed_fields.confidence === "medium" ? "📊" : "🔍"}{" "}
+                    {ocrResult.parsed_fields.confidence} confidence
+                  </span>
+                )}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setFile(null); onOcrResult(null); }}
+              style={{
+                background: "transparent", border: "none", color: "#64748b",
+                fontSize: 12, cursor: "pointer", marginTop: 4,
+                textDecoration: "underline",
+              }}
+            >
+              Upload different receipt
+            </button>
+          </div>
+        ) : (
+          /* Default state */
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12,
+              background: "rgba(124,58,237,0.12)", color: "#a78bfa",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 20,
+            }}>📷</div>
+            <span style={{ color: "#94a3b8", fontSize: 13, fontWeight: 500 }}>
+              Drag & drop a receipt or <span style={{ color: "#a78bfa", textDecoration: "underline" }}>browse</span>
+            </span>
+            <span style={{ color: "#475569", fontSize: 11 }}>
+              JPEG, PNG, WebP, or TIFF • Max 10 MB
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function SubmitExpense() {
   const toast = useToast();
   const { preview, fetchPreview } = useConversionPreview();
 
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState(null);
+
   const {
     register,
     handleSubmit,
     watch,
     reset,
+    setValue,
     getValues,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -172,6 +335,72 @@ export default function SubmitExpense() {
     fetchPreview(amount, currency);
   };
 
+  // Handle OCR upload
+  const handleOcr = useCallback(async (file) => {
+    if (!file) {
+      setOcrResult(null);
+      return;
+    }
+
+    setOcrLoading(true);
+    setOcrResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await client.post("/api/v1/receipts/ocr", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const data = res.data;
+      setOcrResult(data);
+
+      // Auto-fill form fields from OCR result
+      const parsed = data.parsed_fields;
+      if (parsed) {
+        if (parsed.amount) {
+          setValue("amount", String(parsed.amount), { shouldValidate: true });
+        }
+        if (parsed.currency && CURRENCIES.includes(parsed.currency)) {
+          setValue("currency", parsed.currency, { shouldValidate: true });
+        }
+        if (parsed.category) {
+          setValue("category", parsed.category, { shouldValidate: true });
+        }
+        if (parsed.vendor) {
+          setValue("title", parsed.vendor, { shouldValidate: true });
+        }
+        if (parsed.date) {
+          // Try to normalize date to YYYY-MM-DD
+          try {
+            const d = new Date(parsed.date);
+            if (!isNaN(d.getTime())) {
+              const iso = d.toISOString().split("T")[0];
+              if (iso <= TODAY) {
+                setValue("expense_date", iso, { shouldValidate: true });
+              }
+            }
+          } catch { /* ignore parse error */ }
+        }
+
+        const filledFields = [parsed.amount, parsed.vendor, parsed.date, parsed.category]
+          .filter(Boolean).length;
+
+        if (filledFields > 0) {
+          toast.success(
+            "Receipt scanned!",
+            `Auto-filled ${filledFields} field${filledFields > 1 ? "s" : ""} from your receipt.`
+          );
+        }
+      }
+    } catch (err) {
+      toast.error("OCR failed", err.message || "Could not process receipt image");
+    } finally {
+      setOcrLoading(false);
+    }
+  }, [setValue, toast]);
+
   const onSubmit = async (data) => {
     const payload = {
       ...data,
@@ -182,6 +411,7 @@ export default function SubmitExpense() {
       await client.post("/api/v1/expenses", payload);
       toast.success("Expense submitted!", `"${data.title}" has been sent for review.`);
       reset({ currency: "USD", expense_date: TODAY });
+      setOcrResult(null);
     } catch (err) {
       toast.error("Submission failed", err.message);
     }
@@ -197,7 +427,7 @@ export default function SubmitExpense() {
         <div>
           <h1 style={styles.pageTitle}>Submit an Expense</h1>
           <p style={styles.pageSubtitle}>
-            Fill in the details below. All submitted expenses go to your manager for approval.
+            Fill in the details below or scan a receipt to auto-fill. All submitted expenses go to your manager for approval.
           </p>
         </div>
         <div style={styles.badge}>
@@ -205,6 +435,21 @@ export default function SubmitExpense() {
           Draft
         </div>
       </div>
+
+      {/* ── Receipt Upload ────────────────────────────────────────────────────── */}
+      <section style={styles.card}>
+        <p style={styles.sectionLabel}>Receipt Upload</p>
+        <ReceiptUploadZone
+          onOcrResult={handleOcr}
+          ocrLoading={ocrLoading}
+          ocrResult={ocrResult}
+        />
+        {!ocrResult && !ocrLoading && (
+          <p style={{ margin: "10px 0 0", fontSize: 12, color: "#475569" }}>
+            💡 Upload a receipt to automatically extract expense details using OCR
+          </p>
+        )}
+      </section>
 
       {/* ── Form card ────────────────────────────────────────────────────────── */}
       <section style={styles.card}>
@@ -305,7 +550,7 @@ export default function SubmitExpense() {
           <div style={styles.formFooter}>
             <span style={styles.requiredNote}>* Required fields</span>
             <div style={{ display: "flex", gap: 10 }}>
-              <Button type="button" variant="ghost" onClick={() => reset({ currency: "USD", expense_date: TODAY })}>
+              <Button type="button" variant="ghost" onClick={() => { reset({ currency: "USD", expense_date: TODAY }); setOcrResult(null); }}>
                 Clear form
               </Button>
               <Button type="submit" loading={isSubmitting}>
@@ -485,4 +730,22 @@ const styles = {
     flexShrink: 0,
     marginTop: 1,
   },
+  ocrTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "3px 10px",
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 500,
+    background: "rgba(124,58,237,0.12)",
+    border: "1px solid rgba(124,58,237,0.25)",
+    color: "#c4b5fd",
+    whiteSpace: "nowrap",
+  },
 };
+
+// ─── Inject spinner animation ──────────────────────────────────────────────────
+const spinStyle = document.createElement("style");
+spinStyle.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+document.head.appendChild(spinStyle);

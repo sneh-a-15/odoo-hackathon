@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, users, currency, approval_rules, approvals, expenses, dashboard
+from app.api.routes import auth, users, currency, approval_rules, approvals, expenses, dashboard, receipts
 
 app = FastAPI(title="Reimbursement API", version="1.0.0")
 
@@ -19,3 +19,4 @@ app.include_router(approval_rules.router, prefix="/api/v1")
 app.include_router(approvals.router, prefix="/api/v1")
 app.include_router(expenses.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(receipts.router, prefix="/api/v1")

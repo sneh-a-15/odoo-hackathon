@@ -6,7 +6,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import UserManagement from "./pages/admin/UserManagement";
 import SubmitExpense from "./pages/employee/SubmitExpense";
+import ExpenseList from "./pages/employee/ExpenseList";
 import RuleBuilder from "./pages/admin/RuleBuilder";
+import ApprovalQueue from "./pages/manager/ApprovalQueue";
 
 //  Auth Context 
 
@@ -135,7 +137,9 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
           <Route path="/admin/rules" element={<ProtectedRoute><RuleBuilder /></ProtectedRoute>} />
+          <Route path="/expenses" element={<ProtectedRoute><ExpenseList /></ProtectedRoute>} />
           <Route path="/expenses/submit" element={<ProtectedRoute><SubmitExpense /></ProtectedRoute>} />
+          <Route path="/manager/queue" element={<ProtectedRoute><ApprovalQueue /></ProtectedRoute>} />
 
           {/* Default redirect */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

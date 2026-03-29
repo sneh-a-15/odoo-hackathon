@@ -140,24 +140,25 @@ function TimelineItem({ item, isLast }) {
 
         <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94a3b8" }}>
           <span style={{ color: "#64748b" }}>by </span>
-          <span style={{ color: "#c4b5fd", fontWeight: 500 }}>{item.approver_name ?? item.approver_user_id ?? "Approver"}</span>
+          <span style={{ color: "#c4b5fd", fontWeight: 500 }}>{item.decided_by_name ?? item.decided_by ?? "Approver"}</span>
         </p>
 
-        {item.comment && (
-          <div style={{
-            marginTop:    8,
-            padding:      "10px 12px",
-            background:   "#0f1117",
-            border:       "1px solid #1e2330",
-            borderRadius: 6,
-            fontSize:     13,
-            color:        "#94a3b8",
-            lineHeight:   1.6,
-            fontStyle:    "italic",
-          }}>
-            "{item.comment}"
-          </div>
-        )}
+        <div style={{
+          marginTop:    8,
+          padding:      "10px 12px",
+          background:   "rgba(15,17,23,0.8)",
+          border:       "1px solid #1e2330",
+          borderRadius: 6,
+          fontSize:     13,
+          color:        item.comment ? "#94a3b8" : "#334155",
+          lineHeight:   1.6,
+          fontStyle:    item.comment ? "italic" : "normal",
+        }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#334155", display: "block", marginBottom: 4 }}>
+            Comment
+          </span>
+          {item.comment ? `"${item.comment}"` : "None"}
+        </div>
       </div>
     </div>
   );

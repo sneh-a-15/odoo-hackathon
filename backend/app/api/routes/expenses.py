@@ -104,6 +104,7 @@ def get_expenses(
             {
                 "id": str(e.id),
                 "title": e.title,
+                "description": e.description,
                 "amount": float(e.amount),
                 "currency": e.currency,
                 "converted_amount": float(e.converted_amount) if e.converted_amount else None,

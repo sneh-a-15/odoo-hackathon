@@ -69,6 +69,7 @@ def get_approval_queue(
             ApprovalQueueItem(
                 expense_id=exp.id,
                 title=exp.title,
+                description=exp.description,
                 submitted_by=str(exp.submitted_by),
                 submitted_by_name=(exp.submitted_by_user.full_name or exp.submitted_by_user.email) if exp.submitted_by_user else "Unknown",
                 amount=float(exp.amount),

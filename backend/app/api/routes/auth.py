@@ -55,7 +55,7 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": str(user.id), "email": user.email, "role": user.role, "company_id": str(company.id)}
+        "user": {"id": str(user.id), "email": user.email, "full_name": user.full_name, "role": user.role, "company_id": str(company.id)}
     }
 
 @router.post("/login", response_model=TokenResponse)
@@ -68,7 +68,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": str(user.id), "email": user.email, "role": user.role, "company_id": str(user.company_id)}
+        "user": {"id": str(user.id), "email": user.email, "full_name": user.full_name, "role": user.role, "company_id": str(user.company_id)}
     }
 
 @router.get("/me")

@@ -29,6 +29,7 @@ class ApprovalDecideRequest(BaseModel):
 class ApprovalQueueItem(BaseModel):
     expense_id: UUID
     title: str
+    description: Optional[str] = None
     submitted_by: str
     submitted_by_name: str
     amount: float
